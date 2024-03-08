@@ -162,6 +162,28 @@ int main(int argc, char** argv) {
         }
     }
 
+    // Check if all argument were provided for use
+    if (arg_n <= 0 || arg_s <= 0 || arg_t <= 0 || arg_i <= 0 || arg_f == NULL) {
+        printf("All arguments are required\n");
+        print_usage(argv[0]);
+
+        return(EXIT_FAILURE);
+    }
+
+    // Keep the iterator low to prevent confusion and time lag on OpSyS server
+    if (arg_t > 10) {
+        printf("Please keep your time limit for workers between 0 and 10 seconds to reduce time strain");
+
+        return (EXIT_FAILURE);
+    }
+    // Keep the number of simultaneous processes low to reduce lag on OpSys server
+    if (arg_s > 20) {
+        printf("Please keep the simultaneous number of processes below 20");
+
+        return(EXIT_FAILURE);
+    }
+
+
     // create array of PCBs for the process table
     struct PCB processTable[arg_n];
 
@@ -185,5 +207,55 @@ int main(int argc, char** argv) {
     if (clockPointer == (struct Clock*)-1) {
         perror("oss.c: Error in shmat");
         exit(1);
+    }
+
+    clockPointer->seconds = 0;
+    clockPointer->nanoseconds = 0;
+
+    msgbuffer msg;
+    key_t key;
+    system("touching msgq.txt");
+
+    // key for message queue
+    if ((key = ftok("msgq.txt" , 1)) == -1) {
+        perror("oss.c: ftok error\n");
+        exit(1);
+    }
+
+    // message queue creation
+    if ((msqid = msgget(key , 0666 | IPC_CREAT)) == -1) {
+        perror("oss.c error in msgget\n");
+        exit(1);
+    }
+
+    // initialize worker variables
+    int activeWorkers = 0; // active workers
+    int endedWorkers = 0; // number of workers ended
+    int timeout = 1; // Loop variable
+
+    arg_i *= 1000000;
+    int launchTimeS;
+    int launchTimeN = clockPointer->nanoseconds + arg_i;
+    if (clockPointer->nanoseconds >= 1000000000) {
+        launchTimeS = clockPointer->seconds + 1;
+        launchTimeN -= 1000000000;
+    }
+
+
+    while(!timeout) {
+        IncrementClock(clockPointer);
+
+        if(activeWorkers < arg_s && clockPointer->seconds >= launchTimeS && clockPointer->nanoseconds >= launchTimeN) {
+            launchTimeN = clockPointer->nanoseconds + arg_i;
+            if (clockPointer->nanoseconds >= 1000000000) {
+                launchTimeS = clockPointer->seconds + 1;
+                launchTimeN -= 1000000000;
+            }
+
+            pid_t workPid = fork();
+            if (workPid == 0) {
+
+            }
+        }
     }
 }
