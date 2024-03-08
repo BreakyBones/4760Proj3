@@ -161,4 +161,29 @@ int main(int argc, char** argv) {
                 return (EXIT_FAILURE);
         }
     }
+
+    // create array of PCBs for the process table
+    struct PCB processTable[arg_n];
+
+    // Initialize the process table
+    for(int i = 0; i < arg_n; i++) {
+        processTable[i].occupied = 0;
+        processTable[i].pid = 0;
+        processTable[i].startSeconds = 0;
+        processTable[i].startNano = 0;
+    }
+
+    // Allocate Shared Memory for Simulated System Clock
+    shmid = shmget(SHMKEY, sizeof(struct Clock), 0666 | IPC_CREAT);
+    if (shmid == -1) {
+        perror("oss.c: Error in creating shared memory ID");
+        exit(1);
+    }
+
+    // Attach to shared memory
+    clockPointer = (struct Clock*)shmat(shmid, 0, 0);
+    if (clockPointer == (struct Clock*)-1) {
+        perror("oss.c: Error in shmat");
+        exit(1);
+    }
 }
