@@ -112,6 +112,13 @@ void log(const char* logFile, const char* message) {
 }
 
 int main(int argc, char** argv) {
+    // set up variables for use
+    char opt;
+    const char optString[] ="hn:s:t:i:f:";
+
+    int randomSeconds, randomNano;
+    int arg_n , arg_s , arg_t , arg_i;
+    char* arg_f;
 
 
 
@@ -123,5 +130,35 @@ int main(int argc, char** argv) {
     if (setupitimer() == -1) {
         perror("Failed to set up ITIMER_PROF interval timer");
         return 1;
+    }
+
+    while((opt = getopt(argc , argv, optString)) != -1) {
+        switch(opt) {
+            case 'h':
+                print_usage(argv[0]);
+                return(EXIT_SUCCESS);
+            case 'n':
+                arg_n = atoi(optarg);
+                break;
+            case 's':
+                arg_s = atoi(optarg);
+                break;
+            case 't':
+                arg_t = atoi(optarg);
+                break;
+            case 'i':
+                arg_t = atoi(optarg);
+                break;
+            case 'f':
+                arg_f = optarg;
+                break;
+            case '?':
+                print_usage(argv[0]);
+                break;
+            default:
+                printf("Invalid option %c\n" , optopt);
+                print_usage(argv[0]);
+                return (EXIT_FAILURE);
+        }
     }
 }
