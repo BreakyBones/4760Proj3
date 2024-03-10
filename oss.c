@@ -229,13 +229,7 @@ int main(int argc, char** argv) {
     }
 
 
-    arg_i *= 1000000;
-    int launchTimeS;
-    int launchTimeN = clockPointer->nanoseconds + arg_i;
-    if (clockPointer->nanoseconds >= 1000000000) {
-        launchTimeS = clockPointer->seconds + 1;
-        launchTimeN -= 1000000000;
-    }
+
 
     for( int i = 0; i < arg_s; i++) {
         pid_t childPid = fork();
@@ -264,16 +258,24 @@ int main(int argc, char** argv) {
         }
     }
 
+    arg_i *= 1000000;
+    int launchTimeS;
+    int launchTimeN = clockPointer->nanoseconds + arg_i;
+    if (clockPointer->nanoseconds >= 1000000000) {
+        launchTimeS = clockPointer->seconds + 1;
+        launchTimeN -= 1000000000;
+    }
+
     // initialize worker variables
     int activeWorkers = arg_s; // active workers
-    int totalWorkers = 0; // number of workers ended
+    int workerNum = 0; // number of workers ended
     int terminatedWorkers = 0;
     int timeout = 1; // Loop variable
 
     while(!timeout) {
         IncrementClock(clockPointer);
 
-        struct PCB childP = processTable[totalWorkers];
+        struct PCB childP = processTable[workerNum];
         int cPid = childP.pid;
 
         if (cPid != 0 && childP.occupied == 1) {
@@ -284,7 +286,7 @@ int main(int argc, char** argv) {
                 exit(1);
             } else {
                 char newBuffer[20] , buffer1[20], buffer2[20], buffer3[20];
-                sprintf(newBuffer, "%d" , totalWorkers);
+                sprintf(newBuffer, "%d" , workerNum);
                 sprintf(buffer1 , "%d" , cPid);
                 sprintf(buffer2 , "%d" , clockPointer->seconds);
                 sprintf(buffer3 , "%d" , clockPointer->nanoseconds);
@@ -301,7 +303,7 @@ int main(int argc, char** argv) {
                 exit(1);
             } else {
                 char newBuffer1[20], buffer4[20], buffer5[20], buffer6[20];
-                sprintf(newBuffer1, "%d", totalWorkers);
+                sprintf(newBuffer1, "%d", workerNum);
                 sprintf(buffer4, "%d" , cPid);
                 sprintf(buffer5, "%d" , clockPointer->seconds);
                 sprintf(buffer6, "%d" , clockPointer->nanoseconds);
@@ -316,6 +318,8 @@ int main(int argc, char** argv) {
         int status;
         int terminatingPid = waitpid(-1, &status, WNOHANG);
 
+
+
         if (terminatingPid !=0) {
             terminatedWorkers++;
 
@@ -326,7 +330,66 @@ int main(int argc, char** argv) {
                 }
             }
 
-            if(workers < proc)
+            if(activeWorkers < arg_n) {
+                activeWorkers++;
+                pid_t childPid = fork();
+
+                if (childPid == 0) {
+                    generateTime(arg_t , &randomSeconds , &randomNano);
+
+                    char randomSecondsBuffer[20], randomNanoBuffer[20];
+                    sprintf(randomSecondsBuffer, "%d" , randomSeconds);
+                    sprintf(randomNanoBuffer, "%d" , randomNano);
+
+                    char* args[] = {"./worker" , randomSecondsBuffer, randomNanoBuffer, 0};
+
+                    execvp(args[0], args);
+                } else {
+                    for (int i = 0; i < arg_n; i++) {
+                        if (processTable[i].pid == 0) {
+                            processTable[i].occupied = 1;
+                            processTable[i].pid = childPid;
+                            processTable[i].startSeconds = clockPointer->seconds;
+                            processTable[i].startNano = clockPointer->nanoseconds;
+                            break;
+                        }
+                    }
+                }
+            }
+
+        }
+        if ((clockPointer->nanoseconds % (int)(1000000000 / 2)) == 0) {
+            PCBDisplay(clockPointer, processTable, arg_n);
+            if(terminatedWorkers >= arg_n) {
+                break;
+            }
+        }
+
+        workerNum++;
+        if(workerNum >= arg_n) {
+            workerNum = 0;
         }
     }
+
+    for(int i = 0; i < arg_n; i++) {
+        if(processTable[i].occupied == 1) {
+            kill(processTable[i].pid, SIGKILL);
+        }
+    }
+
+    if (msgctl(msqid, IPC_RMID, NULL) == -1) {
+        perror("OSS.c: msgctl to clear queue, failed\n");
+        exit(1);
+    }
+
+    shmdt(clockPointer);
+
+    if(shmctl(smhid, IPC_RMID, NULL) == -1) {
+        perror("OSS.c smhtcl to get rid of shared memory, failed\n");
+        exit(1);
+    }
+
+    system("rm msgq.txt");
+
+    return EXIT_SUCCESS;
 }
