@@ -10,6 +10,7 @@
 #include <sys/msg.h>
 #include <string.h>
 #include <errno.h>
+#include <signal.h>
 
 #define SHMKEY 2563849
 
@@ -384,7 +385,7 @@ int main(int argc, char** argv) {
 
     shmdt(clockPointer);
 
-    if(shmctl(smhid, IPC_RMID, NULL) == -1) {
+    if(shmctl(shmid, IPC_RMID, NULL) == -1) {
         perror("OSS.c smhtcl to get rid of shared memory, failed\n");
         exit(1);
     }
