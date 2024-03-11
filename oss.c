@@ -11,6 +11,7 @@
 #include <string.h>
 #include <errno.h>
 #include <signal.h>
+#include <sys/time.h>
 
 #define SHMKEY 2563849
 
