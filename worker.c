@@ -25,7 +25,7 @@ struct Clock {
 typedef struct msgbuffer {
     long mtype;
     int intData;
-};
+} msgbuffer;
 
 int main(int argc, char **argv) {
     struct msgbuffer msg;
@@ -41,13 +41,72 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-// Create Message Queue
+    // Create Message Queue
     if ((msqid = msgget(key , 0666)) == -1) {
         perror("worker.c: error in creating message queue\n");
         end(1);
     }
 
+    int lengthSeconds;
+    int lengthNano;
 
+    int shmid = shmget(SHMKEY, sizeof(struct Clock), 0666);
+    if (shmid == -1) {
+        perror("worker.c: Error in shmget\n");
+        exit(1);
+    }
+    struct Clock* clockPointer;
+    clockPointer = (struct Clock*)shmat(shmid, 0 ,0);
+    if (clockPointer == (struct Clock*)-1) {
+        perror("worker.c: Error in shmat\n");
+        exit(1);
+    }
+
+    int StopTimeS = clockPointer->seconds + lengthSeconds;
+    int StopTimeN = clockPointer->nanoSeconds + lengthNano;
+    int secondTracker = clockPointer->seconds;
+    printf("Worker PID:%d PPID:%d Called with oss: TermTimeS: %d TermTimeNano: %d\n--Received message\n", getpid() , getppid(), StopTimeS , StopTimeN);
+
+    while(1) {
+        if (msgrcv(msqid, &msg, sizeof(msgbuffer), getpid(), 0) == -1) {
+            perror("worker.c: failed to recieve message from oss\n");
+            exit(1);
+        }
+
+        if(clockPointer->seconds >= secondTracker + 1) {
+            printf("WORKER PID:%d SysClock:%u SysClockNano:%u TermTime:%d TermTimeNano%d\n--%d seconds have passed since starting\n" , getpid(), getppid(), clockPointer->seconds, clockPointer->nanoSeconds, StopTimeN, ((int)clockPointer->seconds - StopTimeS));
+            secondTracker = clockPointer->seconds;
+        }
+
+        msg.mtype = getppid();
+
+        if(clockPointer->seconds >= StopTimeS) {
+            msg.mtype = 0;
+            if (msgsnd(msqid , &msg, sizeof(msgbuffer)-sizeof(long) , 0) == -1) {
+                perror("worker.c: msgsnd to oss failed\n");
+                exit(1);
+            }
+            break;
+        } else if (clockPointer->seconds == StopTimeS && clockPointer->nanoSeconds >= StopTimeN) {
+            msg.intData = 0;
+
+            if (msgsnd(msqid , &msg, sizeof(msgbuffer)-sizeof(long) , 0) == -1) {
+                perror("worker.c: msgsnd to oss failed\n");
+                exit(1);
+            }
+            break;
+        }
+
+        msg.intData = 1;
+        if (msgsnd(msqid, &msg, sizeof(msgbuffer)-sizeof(long), 0) == -1) {
+            perror("worker.c msgsnd to oss failed\n");
+            exit(1);
+        }
+    }
+
+    printf("WORKER PID%d PPID%d SysClockS:%u SysClockNano:%u TermTimeS:%d TermTimeNano:%d\n--Terminating\n" , getpid(), getppid(), clockPointer->seconds, clockPointer->nanoSeconds, StopTimeS, StopTimeN);
+
+    return(EXIT_SUCCESS);
 
 }
 
