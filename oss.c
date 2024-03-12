@@ -229,11 +229,11 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-    printf("shared memory complete, testing");
+    printf("shared memory complete, testing\n");
 
 
     for( int i = 0; i < arg_s; i++) {
-        printf("testing launch");
+        printf("testing launch\n");
         pid_t childPid = fork();
 
         if (childPid == 0) {
