@@ -217,17 +217,18 @@ int main(int argc, char** argv) {
     key_t key;
     system("touch msgq.txt");
 
-    // key for message queue
-    if ((key = ftok("msgq.txt" , 1)) == -1) {
+    // get a key for our message queues
+    if ((key = ftok("msgq.txt", 1)) == -1) {
         perror("oss.c: ftok error\n");
         exit(1);
     }
 
     // message queue creation
-    if ((msqid = msgget(key , 0666 | IPC_CREAT)) == -1) {
-        perror("oss.c error in msgget\n");
+    if ((msqid = msgget(key, 0666 | IPC_CREAT)) == -1) {
+        perror("oss.c: error in msgget\n");
         exit(1);
     }
+    printf("oss.c: message queue is set up\n");
 
     printf("shared memory complete, testing\n");
 
@@ -272,7 +273,7 @@ int main(int argc, char** argv) {
     int activeWorkers = arg_s; // active workers
     int workerNum = 0; // number of workers ended
     int terminatedWorkers = 0;
-    int timeout = 1; // Loop variable
+    bool timeout = false; // Loop variable
 
     while(!timeout) {
         IncrementClock(clockPointer);
