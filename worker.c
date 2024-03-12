@@ -44,7 +44,7 @@ int main(int argc, char **argv) {
     // Create Message Queue
     if ((msqid = msgget(key , 0666)) == -1) {
         perror("worker.c: error in creating message queue\n");
-        end(1);
+        exit(1);
     }
 
     int lengthSeconds;
