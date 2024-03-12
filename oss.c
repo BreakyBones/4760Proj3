@@ -297,7 +297,7 @@ int main(int argc, char** argv) {
                 char message[256];
                 sprintf(message, "OSS: Sending message to worker %s PID: %s at time %s:%s", newBuffer , buffer1 , buffer2 , buffer3);
                 printf("%s\n",message);
-                log(arg_f, message);
+                logging(arg_f, message);
             }
 
             msgbuffer recieve;
@@ -314,7 +314,7 @@ int main(int argc, char** argv) {
                 char message2[20];
                 sprintf(message2, "OSS: Recieving message from worker %s PID: %s at time %s:%s\n" , newBuffer1 ,buffer4, buffer5, buffer6);
                 printf("%s\n" , message2);
-                log(arg_f , message2);
+                logging(arg_f , message2);
             }
         }
 
