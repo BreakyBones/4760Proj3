@@ -233,6 +233,7 @@ int main(int argc, char** argv) {
 
 
     for( int i = 0; i < arg_s; i++) {
+        printf("testing launch");
         pid_t childPid = fork();
 
         if (childPid == 0) {
