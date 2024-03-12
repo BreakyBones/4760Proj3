@@ -102,7 +102,7 @@ static int setupitimer(void) { /* set ITIMER_PROF for 60-second intervals */
     return (setitimer(ITIMER_PROF, &value, NULL));
 }
 
-void log(const char* logFile, const char* message) {
+void logging(const char* logFile, const char* message) {
     FILE* filePointer = fopen(logFile, "a");
     if(filePointer != NULL) {
         fprintf(filePointer, "%s", message);
