@@ -149,7 +149,7 @@ int main(int argc, char** argv) {
                 arg_t = atoi(optarg);
                 break;
             case 'i':
-                arg_t = atoi(optarg);
+                arg_i = atoi(optarg);
                 break;
             case 'f':
                 arg_f = optarg;
