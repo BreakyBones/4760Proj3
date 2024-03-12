@@ -215,7 +215,7 @@ int main(int argc, char** argv) {
 
     msgbuffer msg;
     key_t key;
-    system("touching msgq.txt");
+    system("touch msgq.txt");
 
     // key for message queue
     if ((key = ftok("msgq.txt" , 1)) == -1) {
