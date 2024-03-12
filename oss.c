@@ -165,7 +165,7 @@ int main(int argc, char** argv) {
     }
 
     // Check if all argument were provided for use
-    if (arg_n <= 0 || arg_s <= 0 || arg_t <= 0 || arg_i <= 0 || arg_f == "") {
+    if (arg_n <= 0 || arg_s <= 0 || arg_t <= 0 || arg_i <= 0) {
         printf("All arguments are required\n");
         print_usage(argv[0]);
 
