@@ -229,7 +229,7 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-
+    printf("shared memory complete, testing");
 
 
     for( int i = 0; i < arg_s; i++) {
