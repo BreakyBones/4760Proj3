@@ -40,7 +40,7 @@ typedef struct msgbuffer {
 } msgbuffer;
 
 void print_usage(const char *progName) {
-    printf("Usage for %s: -n <n_value> -s <s_value> -t <t_value> -i <i_value>\n" , progName);
+    printf("Usage for %s: -n <n_value> -s <s_value> -t <t_value> -i <i_value> -f <fileName>\n" , progName);
     printf("Options:\n");
     printf("-n: stands for the total number of workers to launch\n");
     printf("-s: Defines how many workers are allowed to run simultaneously\n");
@@ -165,7 +165,7 @@ int main(int argc, char** argv) {
     }
 
     // Check if all argument were provided for use
-    if (arg_n <= 0 || arg_s <= 0 || arg_t <= 0 || arg_i <= 0 || arg_f == NULL) {
+    if (arg_n <= 0 || arg_s <= 0 || arg_t <= 0 || arg_i <= 0 || arg_f == "") {
         printf("All arguments are required\n");
         print_usage(argv[0]);
 
