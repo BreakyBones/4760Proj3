@@ -15,7 +15,7 @@
 
 #define SHMKEY 2563849
 // global variables
-#define incrementNano 2500
+#define incrementNano 25000000
 #define oneSecond 1000000000
 int shmid, msqid;
 
