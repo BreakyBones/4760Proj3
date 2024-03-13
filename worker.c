@@ -94,7 +94,7 @@ int main(int argc, char **argv) {
         if(clockPointer->seconds >= StopTimeS) {
             msg.mtype = 0;
             if (msgsnd(msqid , &msg, sizeof(msgbuffer)-sizeof(long) , 0) == -1) {
-                perror("worker.c: msgsnd to oss failed\n");
+                perror("worker.c: msgsnd to oss failed 1 \n");
                 exit(1);
             }
             break;
@@ -102,7 +102,7 @@ int main(int argc, char **argv) {
             msg.intData = 0;
 
             if (msgsnd(msqid , &msg, sizeof(msgbuffer)-sizeof(long) , 0) == -1) {
-                perror("worker.c: msgsnd to oss failed\n");
+                perror("worker.c: msgsnd to oss failed 2 \n");
                 exit(1);
             }
             break;
@@ -110,7 +110,7 @@ int main(int argc, char **argv) {
 
         msg.intData = 1;
         if (msgsnd(msqid, &msg, sizeof(msgbuffer)-sizeof(long), 0) == -1) {
-            perror("worker.c msgsnd to oss failed\n");
+            perror("worker.c msgsnd to oss failed 3 \n");
             exit(1);
         }
     }
