@@ -264,7 +264,7 @@ int main(int argc, char** argv) {
     arg_i *= 1000000;
     int launchTimeS;
     int launchTimeN = clockPointer->nanoseconds + arg_i;
-    if (clockPointer->nanoseconds >= 1000000000) {
+    if (launchTimeN >= 1000000000) {
         launchTimeS = clockPointer->seconds + 1;
         launchTimeN -= 1000000000;
     }
@@ -310,7 +310,7 @@ int main(int argc, char** argv) {
                 sprintf(buffer5, "%d" , clockPointer->seconds);
                 sprintf(buffer6, "%d" , clockPointer->nanoseconds);
 
-                char message2[20];
+                char message2[256];
                 sprintf(message2, "OSS: Recieving message from worker %s PID: %s at time %s:%s\n" , newBuffer1 ,buffer4, buffer5, buffer6);
                 logging(arg_f , message2);
             }
