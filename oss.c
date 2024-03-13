@@ -61,7 +61,7 @@ void generateTime(int maxSeconds, int* seconds, int *nanoseconds) {
 
 // Increment Clock
 void IncrementClock(struct Clock* clockPointer) {
-    clockPointer->nanoseconds += 100;
+    clockPointer->nanoseconds += 250000000;
 
     if (clockPointer->nanoseconds >= 1000000000) {
         clockPointer->seconds++;
