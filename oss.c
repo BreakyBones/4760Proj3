@@ -14,97 +14,103 @@
 #include <sys/time.h>
 
 #define SHMKEY 2563849
-
+// global variables
+#define incrementNano 100000000
+#define oneSecond 1000000000
 int shmid, msqid;
 
-// Create the system clock
+//----------------------------------------------------------------------------------------------
 struct Clock {
     int seconds;
-    int nanoseconds;
+    int nanoSeconds;
 };
 
 struct Clock *clockPointer;
 
-// Define the PCB Table as per instructions
+
+//----------------------------------------------------------------------------------------------
 struct PCB {
-    int occupied; // Whether the current slot is occupied
-    pid_t pid; // Process ID of the Child
-    int startSeconds; // Time in seconds of fork
-    int startNano; // Time in nanoseconds of fork
+    int occupied;           // either true or false
+    pid_t pid;              // process id of this child
+    int startSeconds;       // time when it was forked
+    int startNano;          // time when it was forked
 };
 
-// define the message buffer
+//----------------------------------------------------------------------------------------------
 typedef struct msgbuffer {
-    long mtype; // Stores the type of message and sends it to process
+    long mtype; //Important: this store the type of message, and that is used to direct a message to a particular process (address)
     int intData;
 } msgbuffer;
 
-void print_usage(const char *progName) {
-    printf("Usage for %s: -n <n_value> -s <s_value> -t <t_value> -i <i_value> -f <fileName>\n" , progName);
-    printf("Options:\n");
-    printf("-n: stands for the total number of workers to launch\n");
-    printf("-s: Defines how many workers are allowed to run simultaneously\n");
-    printf("-t: The time limit to pass to the workers\n");
-    printf("-i: How often a worker should be launched (in milliseconds)\n");
-    printf("-f: The name of the Logfile to pass OSS output to\n");
+
+// help function -------------------------------------------------------------------------------
+void help(){
+    printf("Usage: ./oss [-h] [-n proc] [-s simul] [-t timelimit] [-f logfile]\n");
+    printf("\t-h: Help Information\n");
+    printf("\t-n proc: Number of total children to launch\n");
+    printf("\t-s simul: How many children to allow to run simultaneously\n");
+    printf("\t-t timelimit: Bound of time that the child process will be launched for\n");
+    printf("\t-f logfile: The name of Logfile you want to write to");
 }
 
-void generateTime(int maxSeconds, int* seconds, int *nanoseconds) {
+
+// Function to get random seconds and nanoseconds ----------------------------------------------
+void generateRandomTime(int maxSeconds, int *seconds, int *nanoseconds) {
     srand(time(NULL));
 
-    // Random seconds between 1 and limit
+    //Generate random seconds between 1 and timeLimit
     *seconds = (rand() % maxSeconds) + 1;
 
-    // Random Nanoseconds
-    *nanoseconds = rand() % 1000000000;
-};
+    //Generate random nanoseconds
+    *nanoseconds = rand() % oneSecond;
+}
 
-// Increment Clock
-void IncrementClock(struct Clock* clockPointer) {
-    clockPointer->nanoseconds += 250000000;
 
-    if (clockPointer->nanoseconds >= 1000000000) {
+// increment clock function --------------------------------------------------------------------
+void incrementClock(struct Clock* clockPointer) {
+    clockPointer->nanoSeconds += incrementNano;
+
+    // Check if nanoseconds have reached 1 second
+    if (clockPointer->nanoSeconds >= oneSecond) {
         clockPointer->seconds++;
-        clockPointer->nanoseconds = 0;
+        clockPointer->nanoSeconds = 0;
     }
 }
 
-void PCBDisplay(struct Clock* clockPointer, struct PCB* procTable, int proc) {
-    printf("OSS PID: %d SysClockS: %d SysClockNano: %d\n" , getpid(), clockPointer->seconds, clockPointer->nanoseconds);
+
+
+
+// function for displaying the process table---------------------------------------------------
+void procTableDisplay(struct Clock* clockPointer, struct PCB* procTable, int proc){
+    printf("OSS PID: %d  SysClockS: %d  SysClockNano: %d\n", getpid(), clockPointer->seconds, clockPointer->nanoSeconds);
     printf("Process Table: \n");
-    printf("Entry Occupied PID StartS StartN\n");
+    printf("Entry Occupied  PID   StartS   StartN\n");
 
-    for(int i=0; i < proc; i++) {
-        printf("%d\t%d\t%d\t%d\t%d\n" , i , procTable[i].occupied , procTable[i].pid , procTable[i].startSeconds , procTable[i].startNano);
+    for(int i=0; i < proc; i++){
+        printf("%d\t %d\t%d\t%d\t%d\n", i, procTable[i].occupied, procTable[i].pid, procTable[i].startSeconds, procTable[i].startNano);
     }
 }
 
-// Set up the failsafe shutdown
-static void myHandler(int s) {
-    printf("Got signal %d, terminate!\n" , s);
-    exit(1);
+
+bool timeout = false;
+// function for signal handle to change timeout---------------------------------------------
+void alarmSignalHandler(int signum) {
+    printf("Been 60 seconds time to terminate\n");
+    timeout = true;
 }
 
-// Set up myHandler
-static int setupinterrupt (void) {
-    struct sigaction act;
-    act.sa_handler = myHandler;
-    act.sa_flags = 0;
 
-    return(sigemptyset(&act.sa_mask) || sigaction(SIGINT , &act, NULL) || sigaction(SIGPROF , &act , NULL));
+// function for ctrl-c signal handler--------------------------------------------------------
+void controlHandler(int signum) {
+    printf("\nYou hit Ctrl-C. Time to Terminate\n");
+    timeout = true;
 }
 
-static int setupitimer(void) { /* set ITIMER_PROF for 60-second intervals */
-    struct itimerval value;
-    value.it_interval.tv_sec = 60;
-    value.it_interval.tv_usec = 0;
-    value.it_value = value.it_interval;
-    return (setitimer(ITIMER_PROF, &value, NULL));
-}
 
-void logging(const char* logFile, const char* message) {
-    FILE* filePointer = fopen(logFile, "a");
-    if(filePointer != NULL) {
+//fucntion to handle logging when message is recieved and message is sent----------------------
+void logMessage(const char* logFile, const char* message) {
+    FILE* filePointer = fopen(logFile, "a"); //open logFile in append mode
+    if (filePointer != NULL) {
         fprintf(filePointer, "%s", message);
         fclose(filePointer);
     } else {
@@ -113,107 +119,85 @@ void logging(const char* logFile, const char* message) {
     }
 }
 
+
+// main function--------------------------------------------------------------------------------
 int main(int argc, char** argv) {
-    // set up variables for use
-    char opt;
-    const char optString[] ="hn:s:t:i:f:";
+    // Declare variables
+    signal(SIGALRM, alarmSignalHandler);
+    signal(SIGINT, controlHandler);
 
-    int randomSeconds, randomNano;
-    int arg_n , arg_s , arg_t , arg_i;
-    char* arg_f;
+    alarm(60);
+
+    int proc, simul, option;
+    int randomSeconds, randomNanoSeconds;
+    int timeLimit;
+    char* logFile;
 
 
-
-    // Set up Interrupts
-    if (setupinterrupt() == -1) {
-        perror("Failed to set up handler for SIGPROF");
-        return 1;
-    }
-    if (setupitimer() == -1) {
-        perror("Failed to set up ITIMER_PROF interval timer");
-        return 1;
-    }
-
-    while((opt = getopt(argc , argv, optString)) != -1) {
-        switch(opt) {
+    // get opt to get command line arguments
+    while((option = getopt(argc, argv, "hn:s:t:f:")) != -1) {
+        switch(option) {
             case 'h':
-                print_usage(argv[0]);
-                return(EXIT_SUCCESS);
+                help();
+                break;
             case 'n':
-                arg_n = atoi(optarg);
+                proc = atoi(optarg);
                 break;
             case 's':
-                arg_s = atoi(optarg);
+                simul = atoi(optarg);
                 break;
             case 't':
-                arg_t = atoi(optarg);
-                break;
-            case 'i':
-                arg_i = atoi(optarg);
+                timeLimit = atoi(optarg);
                 break;
             case 'f':
-                arg_f = optarg;
+                logFile = optarg;
                 break;
             case '?':
-                print_usage(argv[0]);
-                break;
+                help();
+                return EXIT_FAILURE;
             default:
-                printf("Invalid option %c\n" , optopt);
-                print_usage(argv[0]);
-                return (EXIT_FAILURE);
+                break;
         }
     }
 
-    // Check if all argument were provided for use
-    if (arg_n <= 0 || arg_s <= 0 || arg_t <= 0 || arg_i <= 0 || arg_f == NULL) {
-        printf("All arguments are required\n");
-        print_usage(argv[0]);
-        return(EXIT_FAILURE);
-    }
+    //create array of structs for process table with size = number of children
+    struct PCB processTable[proc];
 
-    // Keep the iterator low to prevent confusion and time lag on OpSyS server
-    if (arg_t > 10) {
-        printf("Please keep your time limit for workers between 0 and 10 seconds to reduce time strain");
-
-        return (EXIT_FAILURE);
-    }
-    // Keep the number of simultaneous processes low to reduce lag on OpSys server
-    if (arg_s > 20) {
-        printf("Please keep the simultaneous number of processes below 20");
-
-        return(EXIT_FAILURE);
-    }
-
-
-    // create array of PCBs for the process table
-    struct PCB processTable[arg_n];
-
-    // Initialize the process table
-    for(int i = 0; i < arg_n; i++) {
+    //Initalize the process table information for each process to 0
+    for(int i = 0; i < proc; i++) {
         processTable[i].occupied = 0;
         processTable[i].pid = 0;
         processTable[i].startSeconds = 0;
         processTable[i].startNano = 0;
     }
 
-    // Allocate Shared Memory for Simulated System Clock
+    //Allocate memory for the simulated clock
     shmid = shmget(SHMKEY, sizeof(struct Clock), 0666 | IPC_CREAT);
     if (shmid == -1) {
-        perror("oss.c: Error in creating shared memory ID");
+        perror("oss.c: Error in shmget");
         exit(1);
     }
 
-    // Attach to shared memory
-    clockPointer = (struct Clock*)shmat(shmid, 0, 0);
-    if (clockPointer == (struct Clock*)-1) {
+    //Attach to the shared memory segment
+    clockPointer = (struct Clock *)shmat(shmid, 0, 0);
+    if (clockPointer == (struct Clock *)-1) {
         perror("oss.c: Error in shmat");
         exit(1);
     }
 
+    //Initialize the simulated clock to zero
     clockPointer->seconds = 0;
-    clockPointer->nanoseconds = 0;
+    clockPointer->nanoSeconds = 0;
 
-    msgbuffer msg;
+    //check all given info
+    printf("Clock pointer: %d  :%d\n", clockPointer->seconds, clockPointer->nanoSeconds);
+    printf("proc: %d\n", proc);
+    printf("simul: %d\n", simul);
+    printf("timelimit: %d\n", timeLimit);
+    printf("proc: %s\n", logFile);
+
+    //set up message queue and logFile
+    msgbuffer buf;
     key_t key;
     system("touch msgq.txt");
 
@@ -223,38 +207,39 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-    // message queue creation
+    //create our message queue
     if ((msqid = msgget(key, 0666 | IPC_CREAT)) == -1) {
         perror("oss.c: error in msgget\n");
         exit(1);
     }
     printf("oss.c: message queue is set up\n");
 
-    printf("shared memory complete, testing\n");
 
-
-    for( int i = 0; i < arg_s; i++) {
-
+    for(int i=0; i < simul; i++) {
         pid_t childPid = fork();
 
         if (childPid == 0) {
-            generateTime(arg_t, &randomSeconds, &randomNano);
+            // Generate the random numbers for the clock
+            generateRandomTime(timeLimit, &randomSeconds, &randomNanoSeconds);
 
+            // Change the ints to strings
             char randomSecondsBuffer[20], randomNanoSecondsBuffer[20];
             sprintf(randomSecondsBuffer, "%d", randomSeconds);
-            sprintf(randomNanoSecondsBuffer, "%d", randomNano);
+            sprintf(randomNanoSecondsBuffer, "%d", randomNanoSeconds);
 
-            char* args[] = {"./worker" , randomSecondsBuffer , randomNanoSecondsBuffer, 0};
+            // Char array to hold information for exec call
+            char* args[] = {"./worker", randomSecondsBuffer, randomNanoSecondsBuffer, 0};
 
-            // execute worker process
+            // Execute the worker file with given arguments
             execvp(args[0], args);
         } else {
-            for(int i = 0; i < arg_n; i++) {
+            // New child was launched, update process table
+            for(int i = 0; i < proc; i++) {
                 if (processTable[i].pid == 0) {
                     processTable[i].occupied = 1;
                     processTable[i].pid = childPid;
                     processTable[i].startSeconds = clockPointer->seconds;
-                    processTable[i].startNano = clockPointer->nanoseconds;
+                    processTable[i].startNano = clockPointer->nanoSeconds;
                     break;
                 }
             }
@@ -262,131 +247,150 @@ int main(int argc, char** argv) {
     }
 
 
-
-    // initialize worker variables
-    int activeWorkers = arg_s; // active workers
-    int workerNum = 0; // number of workers ended
-    int terminatedWorkers = 0;
-    bool timeout = false; // Loop variable
+    int workers = simul; //active number of workers
+    int workerNum = 0;
+    int termWorker = 0;
 
     while(!timeout) {
-        IncrementClock(clockPointer);
-
-        printf("test\n");
+        incrementClock(clockPointer);
 
         struct PCB childP = processTable[workerNum];
         int cPid = childP.pid;
 
-        if (cPid != 0 && childP.occupied == 1) {
-            msg.mtype = cPid;
+        if(cPid != 0 && childP.occupied == 1) {
+            buf.mtype = cPid;
 
-            if (msgsnd(msqid, &msg, sizeof(msgbuffer)-sizeof(long), 0) == -1) {
+            //message send to each launched worker
+            if (msgsnd(msqid, &buf, sizeof(msgbuffer)-sizeof(long), 0) == -1) {
                 perror("oss.c: msgsnd to worker failed");
                 exit(1);
             } else {
-                char newBuffer[20] , buffer1[20], buffer2[20], buffer3[20];
-                sprintf(newBuffer, "%d" , workerNum);
-                sprintf(buffer1 , "%d" , cPid);
-                sprintf(buffer2 , "%d" , clockPointer->seconds);
-                sprintf(buffer3 , "%d" , clockPointer->nanoseconds);
+                // Change the ints to strings
+                char newBuffer[20], buffer1[20], buffer2[20], buffer3[20];
+                sprintf(newBuffer, "%d", workerNum);
+                sprintf(buffer1, "%d", cPid);
+                sprintf(buffer2, "%d", clockPointer->seconds);
+                sprintf(buffer3, "%d", clockPointer->nanoSeconds);
 
                 char message[256];
-                sprintf(message, "OSS: Sending message to worker %s PID: %s at time %s:%s\n", newBuffer , buffer1 , buffer2 , buffer3);
-                logging(arg_f, message);
+                sprintf(message, "OSS: Sending message to worker %s PID %s at time %s:%s\n", newBuffer, buffer1, buffer2, buffer3);
+                printf("%s\n", message);
+                logMessage(logFile, message);
             }
 
-            msgbuffer recieve;
-            if (msgrcv(msqid , &recieve, sizeof(msgbuffer) , getpid(), 0) == -1) {
-                perror("oss.c: failed to recieve message\n");
+            //message recieve
+            msgbuffer rcvbuf;
+            if (msgrcv(msqid, &rcvbuf, sizeof(msgbuffer), getpid(), 0) == -1) {
+                perror("oss.c: Failed to recieve message\n");
                 exit(1);
             } else {
+                // Change the ints to strings
                 char newBuffer1[20], buffer4[20], buffer5[20], buffer6[20];
                 sprintf(newBuffer1, "%d", workerNum);
-                sprintf(buffer4, "%d" , cPid);
-                sprintf(buffer5, "%d" , clockPointer->seconds);
-                sprintf(buffer6, "%d" , clockPointer->nanoseconds);
+                sprintf(buffer4, "%d", cPid);
+                sprintf(buffer5, "%d", clockPointer->seconds);
+                sprintf(buffer6, "%d", clockPointer->nanoSeconds);
 
                 char message2[256];
-                sprintf(message2, "OSS: Recieving message from worker %s PID: %s at time %s:%s\n" , newBuffer1 ,buffer4, buffer5, buffer6);
-                logging(arg_f , message2);
+                sprintf(message2, "OSS: Recieving message from worker %s PID %s at time %s:%s\n", newBuffer1, buffer4, buffer5, buffer6);
+                printf("%s\n", message2);
+                logMessage(logFile, message2);
             }
+
         }
 
+        //see if any workers have terminated
         int status;
         int terminatingPid = waitpid(-1, &status, WNOHANG);
 
+        if (terminatingPid != 0) {
+            termWorker++;
 
-
-        if (terminatingPid !=0) {
-            terminatedWorkers++;
-
-            for(int i =0; i < arg_n; i++) {
+            for(int i=0; i < proc; i++) {
                 if(processTable[i].pid == terminatingPid) {
                     processTable[i].occupied = 0;
                     break;
                 }
             }
 
-            if(activeWorkers < arg_n) {
-                activeWorkers++;
+            if(workers < proc) {
+                //increment the number of active workers
+                workers++;
+                //fork to worker
                 pid_t childPid = fork();
 
                 if (childPid == 0) {
-                    generateTime(arg_t , &randomSeconds , &randomNano);
+                    // Generate the random numbers for the clock
+                    generateRandomTime(timeLimit, &randomSeconds, &randomNanoSeconds);
 
-                    char randomSecondsBuffer[20], randomNanoBuffer[20];
-                    sprintf(randomSecondsBuffer, "%d" , randomSeconds);
-                    sprintf(randomNanoBuffer, "%d" , randomNano);
+                    // Change the ints to strings
+                    char randomSecondsBuffer[20], randomNanoSecondsBuffer[20];
+                    sprintf(randomSecondsBuffer, "%d", randomSeconds);
+                    sprintf(randomNanoSecondsBuffer, "%d", randomNanoSeconds);
 
-                    char* args[] = {"./worker" , randomSecondsBuffer, randomNanoBuffer, 0};
+                    // Char array to hold information for exec call
+                    char* args[] = {"./worker", randomSecondsBuffer, randomNanoSecondsBuffer, 0};
 
+                    // Execute the worker file with given arguments
                     execvp(args[0], args);
                 } else {
-                    for (int i = 0; i < arg_n; i++) {
+                    // New child was launched, update process table
+                    for(int i = 0; i < proc; i++) {
                         if (processTable[i].pid == 0) {
                             processTable[i].occupied = 1;
                             processTable[i].pid = childPid;
                             processTable[i].startSeconds = clockPointer->seconds;
-                            processTable[i].startNano = clockPointer->nanoseconds;
+                            processTable[i].startNano = clockPointer->nanoSeconds;
                             break;
                         }
                     }
                 }
             }
-
         }
-        if ((clockPointer->nanoseconds % (int)(1000000000 / 2)) == 0) {
-            PCBDisplay(clockPointer, processTable, arg_n);
-            if(terminatedWorkers >= arg_n) {
+
+        //display process table every half second
+        if ((clockPointer->nanoSeconds % (int)(oneSecond / 2)) == 0) {
+            procTableDisplay(clockPointer, processTable, proc);
+
+            if(termWorker >= proc) {
                 break;
             }
         }
 
+        //increment worker number
         workerNum++;
-        if(workerNum >= arg_n) {
+        if(workerNum >= proc) {
             workerNum = 0;
         }
+
     }
 
-    for(int i = 0; i < arg_n; i++) {
+
+    // do clean up
+    for(int i=0; i < proc; i++) {
         if(processTable[i].occupied == 1) {
             kill(processTable[i].pid, SIGKILL);
         }
     }
 
+
+    // get rid of message queue
     if (msgctl(msqid, IPC_RMID, NULL) == -1) {
-        perror("OSS.c: msgctl to clear queue, failed\n");
+        perror("oss.c: msgctl to get rid of queue, failed\n");
         exit(1);
     }
 
+    //detach from shared memory
     shmdt(clockPointer);
 
-    if(shmctl(shmid, IPC_RMID, NULL) == -1) {
-        perror("OSS.c smhtcl to get rid of shared memory, failed\n");
+    if (shmctl(shmid, IPC_RMID, NULL) == -1) {
+        perror("oss.c: shmctl to get rid or shared memory, failed\n");
         exit(1);
     }
 
     system("rm msgq.txt");
 
+
     return EXIT_SUCCESS;
+
 }

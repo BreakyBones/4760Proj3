@@ -15,25 +15,29 @@
 
 #define SHMKEY 2563849
 
-// Structure of a clock
+//------------------------------------------------------------------------------------------------------------------------------------
 struct Clock {
     int seconds;
     int nanoSeconds;
 };
 
-// Structure for the message buffer
+
+//------------------------------------------------------------------------------------------------------------------------------------
 typedef struct msgbuffer {
-    long mtype;
+    long mtype; //Important: this store the type of message, and that is used to direct a message to a particular process (address)
     int intData;
 } msgbuffer;
 
-int main(int argc, char **argv) {
-    msgbuffer msg;
-    int msqid = 0; // Msq Queue ID
-    key_t key;
-    msg.mtype = 1;
-    msg.intData;
 
+//-------------------------------------------------------------------------------------------------------------------------------------
+//Main Function
+int main(int argc, char ** argv) {
+    //declare variables for message queue
+    msgbuffer buf;
+    int msqid = 0; // messageQueueID
+    key_t key;
+    buf.mtype = 1;
+    buf.intData;
 
     // get a key for our message queue
     if ((key = ftok("msgq.txt", 1)) == -1){
@@ -47,13 +51,17 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
+
+    //Check the number of commands
     if(argc !=  3) {
         printf("Usage: ./worker [Must be 2 arguments]\n");
         return EXIT_FAILURE;
     }
 
-    int lengthSeconds = atoi(argv[1]);
-    int lengthNano = atoi(argv[2]);
+
+    //change argv[1] to an integer
+    int inputSeconds = atoi(argv[1]);
+    int inputNanoSeconds = atoi(argv[2]);
 
     int shmid = shmget(SHMKEY, sizeof(struct Clock), 0666);
     if (shmid == -1) {
@@ -61,63 +69,73 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-
-    struct Clock* clockPointer;
+    struct Clock *clockPointer;
+    // Attach to the shared memory segment
     clockPointer = (struct Clock *)shmat(shmid, 0, 0);
     if (clockPointer == (struct Clock *)-1) {
         perror("worker.c: Error in shmat\n");
         exit(1);
     }
 
-    int StopTimeS = clockPointer->seconds + lengthSeconds;
-    int StopTimeN = clockPointer->nanoSeconds + lengthNano;
+    //get stop time
+    int sStopTime = clockPointer->seconds + inputSeconds;
+    int nStopTime = clockPointer->nanoSeconds + inputNanoSeconds;
 
-    printf("Worker PID:%d PPID:%d Called with oss: TermTimeS: %d TermTimeNano: %d\n--Received message\n", getpid() , getppid(), StopTimeS , StopTimeN);
+
+    //print startup Info
+    printf("Worker PID:%d PPID:%d Called with oss: TermTimeS: %d TermTimeNano: %d\n--Received message\n", getpid(), getppid(), sStopTime , nStopTime);
+
 
     int sStartTime = clockPointer->seconds;
     int sNanoTime = clockPointer->nanoSeconds;
-    int secondTracker = sStartTime;
+    int copySecond = sStartTime;
 
     while(1) {
-        if (msgrcv(msqid, &msg, sizeof(msgbuffer), getpid(), 0) == -1) {
-            perror("worker.c: failed to recieve message from oss\n");
+        //message receive
+        if ( msgrcv(msqid, &buf, sizeof(msgbuffer), getpid(), 0) == -1) {
+            perror("worker.c: failed to receive message from oss\n");
             exit(1);
         }
 
-        if(clockPointer->seconds >= secondTracker + 1) {
-            printf("WORKER PID:%d SysClock:%u SysClockNano:%u TermTime:%d TermTimeNano%d\n--%d seconds have passed since starting\n" , getpid(), getppid(), clockPointer->seconds, clockPointer->nanoSeconds, StopTimeN, ((int)clockPointer->seconds - StopTimeS));
-            secondTracker = clockPointer->seconds;
+        if(clockPointer->seconds >= copySecond + 1) {
+            printf("WORKER PID:%d PPID:%d SysClockS:%u SysClockNano:%u TermTimeS:%d TermTimeNano:%d\n--%d seconds have passed since starting\n", getpid(), getppid(), clockPointer->seconds, clockPointer->nanoSeconds, sStopTime, nStopTime, (int)clockPointer->seconds - sStartTime);
+            copySecond = clockPointer->seconds;
         }
 
-        msg.mtype = getppid();
+        buf.mtype = getppid();
 
-        if(clockPointer->seconds >= StopTimeS) {
-            msg.mtype = 0;
-            if (msgsnd(msqid , &msg, sizeof(msgbuffer)-sizeof(long) , 0) == -1) {
-                perror("worker.c: msgsnd to oss failed 1 \n");
+        if(clockPointer->seconds >= sStopTime) {
+            buf.intData = 0;
+            //message send
+            if (msgsnd(msqid, &buf, sizeof(msgbuffer)-sizeof(long), 0) == -1) {
+                perror("worker.c: msgsnd to oss failed\n");
                 exit(1);
             }
             break;
-        } else if (clockPointer->seconds == StopTimeS && clockPointer->nanoSeconds >= StopTimeN) {
-            msg.intData = 0;
-
-            if (msgsnd(msqid , &msg, sizeof(msgbuffer)-sizeof(long) , 0) == -1) {
-                perror("worker.c: msgsnd to oss failed 2 \n");
+        } else if (clockPointer->seconds == sStopTime && clockPointer->nanoSeconds >= nStopTime) {
+            buf.intData = 0;
+            //message send
+            if (msgsnd(msqid, &buf, sizeof(msgbuffer)-sizeof(long), 0) == -1) {
+                perror("worker.c: msgsnd to oss failed\n");
                 exit(1);
             }
             break;
         }
 
-        msg.intData = 1;
-        if (msgsnd(msqid, &msg, sizeof(msgbuffer)-sizeof(long), 0) == -1) {
-            perror("worker.c msgsnd to oss failed 3 \n");
+        buf.intData = 1;
+        //message send
+        if (msgsnd(msqid, &buf, sizeof(msgbuffer)-sizeof(long), 0) == -1) {
+            perror("worker.c: msgsnd to oss failed\n");
             exit(1);
         }
+
+
     }
 
-    printf("WORKER PID%d PPID%d SysClockS:%u SysClockNano:%u TermTimeS:%d TermTimeNano:%d\n--Terminating\n" , getpid(), getppid(), clockPointer->seconds, clockPointer->nanoSeconds, StopTimeS, StopTimeN);
+    //display last final message
+    printf("WORKER PID:%d PPID:%d SysClockS:%u SysClockNano:%u TermTimeS:%d TermTimeNano:%d\n--Terminating\n", getpid(), getppid(), clockPointer->seconds, clockPointer->nanoSeconds, sStopTime, nStopTime);
 
-    return(EXIT_SUCCESS);
 
+    return EXIT_SUCCESS;
 }
 
