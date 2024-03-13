@@ -295,7 +295,7 @@ int main(int argc, char** argv) {
                 sprintf(buffer3 , "%d" , clockPointer->nanoseconds);
 
                 char message[256];
-                sprintf(message, "OSS: Sending message to worker %s PID: %s at time %s:%s", newBuffer , buffer1 , buffer2 , buffer3);
+                sprintf(message, "OSS: Sending message to worker %s PID: %s at time %s:%s\n", newBuffer , buffer1 , buffer2 , buffer3);
                 printf("%s\n",message);
                 logging(arg_f, message);
             }
