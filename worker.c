@@ -28,7 +28,7 @@ typedef struct msgbuffer {
 } msgbuffer;
 
 int main(int argc, char **argv) {
-    struct msgbuffer msg;
+    msgbuffer msg;
     int msqid = 0; // Msq Queue ID
     key_t key;
     msg.mtype = 1;
@@ -47,8 +47,8 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    int lengthSeconds;
-    int lengthNano;
+    int lengthSeconds = atoi(argv[1]);
+    int lengthNano = atoi(argv[2]);
 
     int shmid = shmget(SHMKEY, sizeof(struct Clock), 0666);
     if (shmid == -1) {

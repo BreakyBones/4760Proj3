@@ -61,7 +61,7 @@ void generateTime(int maxSeconds, int* seconds, int *nanoseconds) {
 
 // Increment Clock
 void IncrementClock(struct Clock* clockPointer) {
-    clockPointer->nanoseconds += 1000;
+    clockPointer->nanoseconds += 100;
 
     if (clockPointer->nanoseconds >= 1000000000) {
         clockPointer->seconds++;
@@ -234,7 +234,7 @@ int main(int argc, char** argv) {
 
 
     for( int i = 0; i < arg_s; i++) {
-        printf("testing launch\n");
+
         pid_t childPid = fork();
 
         if (childPid == 0) {
