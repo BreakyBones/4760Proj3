@@ -278,6 +278,8 @@ int main(int argc, char** argv) {
     while(!timeout) {
         IncrementClock(clockPointer);
 
+        printf("test\n");
+
         struct PCB childP = processTable[workerNum];
         int cPid = childP.pid;
 
