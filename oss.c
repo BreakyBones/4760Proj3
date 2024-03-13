@@ -10,12 +10,12 @@
 #include <sys/msg.h>
 #include <string.h>
 #include <errno.h>
-#include <signal.h>
-#include <sys/time.h>
 
-#define SHMKEY 2563849
+
+// Parent and child agree on common key
+#define SHMKEY  97805246
 // global variables
-#define incrementNano 25000000
+#define incrementNano 100000000
 #define oneSecond 1000000000
 int shmid, msqid;
 
@@ -77,6 +77,17 @@ void incrementClock(struct Clock* clockPointer) {
     }
 }
 
+
+// increment serviceTime function --------------------------------------------------------------------
+void incrementServiceTime(struct PCB* procTable, int incrementTime, int workerNum) {
+    procTable[workerNum].serviceTimeNano += incrementTime;
+
+    // Check if nanoseconds have reached 1 second
+    if (procTable[workerNum].serviceTimeNano >= oneSecond) {
+        procTable[workerNum].serviceTimeSeconds++;
+        procTable[workerNum].serviceTimeNano = 0;
+    }
+}
 
 
 
@@ -364,7 +375,6 @@ int main(int argc, char** argv) {
         }
 
     }
-
 
     // do clean up
     for(int i=0; i < proc; i++) {

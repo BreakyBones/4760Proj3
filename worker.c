@@ -1,5 +1,3 @@
-// Kanaan Sullivan Project 3 for Operating Systems worker.c
-
 #include <unistd.h>
 #include <sys/types.h>
 #include <stdio.h>
@@ -11,9 +9,9 @@
 #include <string.h>
 #include <errno.h>
 
-// Shared Memory Key
 
-#define SHMKEY 2563849
+// Parent and child agree on common key
+#define SHMKEY  97805246
 
 //------------------------------------------------------------------------------------------------------------------------------------
 struct Clock {
@@ -138,4 +136,3 @@ int main(int argc, char ** argv) {
 
     return EXIT_SUCCESS;
 }
-
