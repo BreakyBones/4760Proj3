@@ -261,13 +261,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    arg_i *= 1000000;
-    int launchTimeS;
-    int launchTimeN = clockPointer->nanoseconds + arg_i;
-    if (launchTimeN >= 1000000000) {
-        launchTimeS = clockPointer->seconds + 1;
-        launchTimeN -= 1000000000;
-    }
+
 
     // initialize worker variables
     int activeWorkers = arg_s; // active workers

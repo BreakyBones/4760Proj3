@@ -35,16 +35,21 @@ int main(int argc, char **argv) {
     msg.intData;
 
 
-    // Genereate Message Queue SHM Key
-    if ((key = ftok("msgq.txt" , 1)) == -1) {
-        perror("Worker.c: Error in generating message queue key\n");
+    // get a key for our message queue
+    if ((key = ftok("msgq.txt", 1)) == -1){
+        perror("worker.c: ftok error\n");
         exit(1);
     }
 
-    // Create Message Queue
-    if ((msqid = msgget(key , 0666)) == -1) {
-        perror("worker.c: error in creating message queue\n");
+    // create our message queue
+    if ((msqid = msgget(key, 0666)) == -1) {
+        perror("worker.c: error in msgget\n");
         exit(1);
+    }
+
+    if(argc !=  3) {
+        printf("Usage: ./worker [Must be 2 arguments]\n");
+        return EXIT_FAILURE;
     }
 
     int lengthSeconds = atoi(argv[1]);
@@ -55,17 +60,23 @@ int main(int argc, char **argv) {
         perror("worker.c: Error in shmget\n");
         exit(1);
     }
+
+
     struct Clock* clockPointer;
-    clockPointer = (struct Clock*)shmat(shmid, 0 ,0);
-    if (clockPointer == (struct Clock*)-1) {
+    clockPointer = (struct Clock *)shmat(shmid, 0, 0);
+    if (clockPointer == (struct Clock *)-1) {
         perror("worker.c: Error in shmat\n");
         exit(1);
     }
 
     int StopTimeS = clockPointer->seconds + lengthSeconds;
     int StopTimeN = clockPointer->nanoSeconds + lengthNano;
-    int secondTracker = clockPointer->seconds;
+
     printf("Worker PID:%d PPID:%d Called with oss: TermTimeS: %d TermTimeNano: %d\n--Received message\n", getpid() , getppid(), StopTimeS , StopTimeN);
+
+    int sStartTime = clockPointer->seconds;
+    int sNanoTime = clockPointer->nanoSeconds;
+    int secondTracker = sStartTime;
 
     while(1) {
         if (msgrcv(msqid, &msg, sizeof(msgbuffer), getpid(), 0) == -1) {
