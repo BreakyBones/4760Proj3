@@ -78,16 +78,7 @@ void incrementClock(struct Clock* clockPointer) {
 }
 
 
-// increment serviceTime function --------------------------------------------------------------------
-void incrementServiceTime(struct PCB* procTable, int incrementTime, int workerNum) {
-    procTable[workerNum].serviceTimeNano += incrementTime;
 
-    // Check if nanoseconds have reached 1 second
-    if (procTable[workerNum].serviceTimeNano >= oneSecond) {
-        procTable[workerNum].serviceTimeSeconds++;
-        procTable[workerNum].serviceTimeNano = 0;
-    }
-}
 
 
 
