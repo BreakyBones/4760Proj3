@@ -15,7 +15,7 @@
 // Parent and child agree on common key
 #define SHMKEY  97805246
 // global variables
-#define incrementNano 100000000
+#define incrementNano 100000
 #define oneSecond 1000000000
 int shmid, msqid;
 
