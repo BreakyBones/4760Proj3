@@ -86,33 +86,31 @@ void incrementClock(struct Clock* clockPointer) {
 
 
 // function for displaying the process table
-void procTableDisplay(struct Clock* clockPointer, struct PCB* procTable, int arg_n){
-    printf("OSS PID: %d  SysClockS: %d  SysClockNano: %d\n", getpid(), clockPointer->seconds, clockPointer->nanoSeconds);
-    printf("Process Table: \n");
-    printf("Entry Occupied  PID   StartS   StartN\n");
-
-    for(int i=0; i < arg_n; i++){
-        printf("%d\t %d\t%d\t%d\t%d\n", i, procTable[i].occupied, procTable[i].pid, procTable[i].startSeconds, procTable[i].startNano);
+void procTableDisplay(struct Clock* clockPointer, struct PCB* pcb, int arg_n){
+    printf("OSS PID:%d SysClockS: %d SysClockNano: %d\nProcess Table:\n" , getpid() , clockPointer->seconds , clockPointer->nanoSeconds);
+    printf("Entry\tOccupied\tPID\tStartS\tStartN\n");
+    for (int i = 0; i < arg_n; i++) {
+        printf("%d\t%d\t\t%d\t%d\t%d\n" , i , pcb[i].occupied , pcb[i].pid , pcb[i].startSeconds , pcb[i].startNano);
     }
 }
 
 
 bool timeout = false;
-// function for signal handle to change timeout---------------------------------------------
+// 60 Seconds timeout function
 void alarmSignalHandler(int signum) {
     printf("Been 60 seconds time to terminate\n");
     timeout = true;
 }
 
 
-// function for ctrl-c signal handler--------------------------------------------------------
+// Ctrl-C quit out
 void controlHandler(int signum) {
     printf("\nYou hit Ctrl-C. Time to Terminate\n");
     timeout = true;
 }
 
 
-//fucntion to handle logging when message is recieved and message is sent----------------------
+// Function to handle logging when message is received and message is sent
 void logMessage(const char* arg_f, const char* message) {
     FILE* filePointer = fopen(arg_f, "a"); //open arg_f in append mode
     if (filePointer != NULL) {
@@ -125,7 +123,7 @@ void logMessage(const char* arg_f, const char* message) {
 }
 
 
-// main function--------------------------------------------------------------------------------
+
 int main(int argc, char** argv) {
     // Declare variables
     signal(SIGALRM, alarmSignalHandler);
@@ -138,7 +136,7 @@ int main(int argc, char** argv) {
     char* arg_f;
 
 
-    // get opt to get command line arguments
+    // Getopt argument handling
     while((opt = getopt(argc, argv, "hn:s:t:i:f:")) != -1) {
         switch(opt) {
             case 'h':
@@ -176,10 +174,10 @@ int main(int argc, char** argv) {
         return(EXIT_FAILURE);
     }
 
-    //create array of structs for process table with size = number of children
+    // Create PCB with amount of processes equal to the arguments
     struct PCB processTable[arg_n];
 
-    //Initalize the process table information for each process to 0
+    // Initialize PCB
     for(int i = 0; i < arg_n; i++) {
         processTable[i].occupied = 0;
         processTable[i].pid = 0;
@@ -187,43 +185,43 @@ int main(int argc, char** argv) {
         processTable[i].startNano = 0;
     }
 
-    //Allocate memory for the simulated clock
+    // Allocate memory for the simulated clock
     shmid = shmget(SHMKEY, sizeof(struct Clock), 0666 | IPC_CREAT);
     if (shmid == -1) {
         perror("oss.c: Error in shmget");
         exit(1);
     }
 
-    //Attach to the shared memory segment
+    // Attach to the shared memory segment
     clockPointer = (struct Clock *)shmat(shmid, 0, 0);
     if (clockPointer == (struct Clock *)-1) {
         perror("oss.c: Error in shmat");
         exit(1);
     }
 
-    //Initialize the simulated clock to zero
+    // Initialize the simulated clock to zero
     clockPointer->seconds = 0;
     clockPointer->nanoSeconds = 0;
 
-    //set up message queue and arg_f
+    // set up message queue and log file using arg_f
     msgbuffer buf;
     key_t key;
     system("touch msgq.txt");
 
-    // get a key for our message queues
+    // Key for message queues
     if ((key = ftok("msgq.txt", 1)) == -1) {
         perror("oss.c: ftok error\n");
         exit(1);
     }
 
-    //create our message queue
+    // Creation of message queue
     if ((msqid = msgget(key, 0666 | IPC_CREAT)) == -1) {
         perror("oss.c: error in msgget\n");
         exit(1);
     }
     printf("oss.c: message queue is set up\n");
 
-
+    // Creation of initial children like described in the project requirements.
     for(int i=0; i < arg_s; i++) {
         pid_t childPid = fork();
 
@@ -259,13 +257,18 @@ int main(int argc, char** argv) {
     int workers = arg_s; //active number of workers
     int workerNum = 0;
     int termWorker = 0;
+
+    // future launch timers using arg_i
     int launchTimerS = clockPointer ->seconds;
     int launchTimerN = clockPointer ->nanoSeconds + arg_i;
     if (launchTimerN >= oneSecond) {
         launchTimerS++;
         launchTimerN = 0;
     }
+
+    // General loop for child handling
     while(!timeout) {
+        // Increment the clock
         incrementClock(clockPointer);
 
         struct PCB childP = processTable[workerNum];
@@ -274,7 +277,7 @@ int main(int argc, char** argv) {
         if(cPid != 0 && childP.occupied == 1) {
             buf.mtype = cPid;
 
-            //message send to each launched worker
+            // Message send to each launched worker
             if (msgsnd(msqid, &buf, sizeof(msgbuffer)-sizeof(long), 0) == -1) {
                 perror("oss.c: msgsnd to worker failed");
                 exit(1);
@@ -292,10 +295,10 @@ int main(int argc, char** argv) {
                 logMessage(arg_f, message);
             }
 
-            //message recieve
+            // On message receive:
             msgbuffer rcvbuf;
             if (msgrcv(msqid, &rcvbuf, sizeof(msgbuffer), getpid(), 0) == -1) {
-                perror("oss.c: Failed to recieve message\n");
+                perror("oss.c: Failed to receive message\n");
                 exit(1);
             } else {
                 // Change the ints to strings
@@ -306,7 +309,7 @@ int main(int argc, char** argv) {
                 sprintf(buffer6, "%d", clockPointer->nanoSeconds);
 
                 char message2[256];
-                sprintf(message2, "OSS: Recieving message from worker %s PID %s at time %s:%s\n", newBuffer1, buffer4, buffer5, buffer6);
+                sprintf(message2, "OSS: Receiving message from worker %s PID %s at time %s:%s\n", newBuffer1, buffer4, buffer5, buffer6);
                 printf("%s\n", message2);
                 logMessage(arg_f, message2);
             }
