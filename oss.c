@@ -12,14 +12,16 @@
 #include <errno.h>
 
 
-// Parent and child agree on common key
-#define SHMKEY  97805246
-// global variables
+// Define Shared Memory Key
+#define SHMKEY  55861349
+
+
+// Define one second and incrementation variable
 #define incrementNano 2500000
 #define oneSecond 1000000000
 int shmid, msqid;
 
-//----------------------------------------------------------------------------------------------
+// Setup internal clock
 struct Clock {
     int seconds;
     int nanoSeconds;
@@ -28,7 +30,7 @@ struct Clock {
 struct Clock *clockPointer;
 
 
-//----------------------------------------------------------------------------------------------
+// create process table
 struct PCB {
     int occupied;           // either true or false
     pid_t pid;              // process id of this child
@@ -36,29 +38,30 @@ struct PCB {
     int startNano;          // time when it was forked
 };
 
-//----------------------------------------------------------------------------------------------
+// define message buffer
 typedef struct msgbuffer {
-    long mtype; //Important: this store the type of message, and that is used to direct a message to a particular process (address)
+    long mtype;
     int intData;
 } msgbuffer;
 
 
 // help function -------------------------------------------------------------------------------
-void help(){
-    printf("Usage: ./oss [-h] [-n proc] [-s simul] [-t timelimit] [-f logfile]\n");
-    printf("\t-h: Help Information\n");
-    printf("\t-n proc: Number of total children to launch\n");
-    printf("\t-s simul: How many children to allow to run simultaneously\n");
-    printf("\t-t timelimit: Bound of time that the child process will be launched for\n");
-    printf("\t-f logfile: The name of Logfile you want to write to");
+void print_usage(){
+    printf("Usage for OSS: -n <n_value> -s <s_value> -t <t_value> -i <i_value> -f <fileName>\n");
+    printf("Options:\n");
+    printf("-n: stands for the total number of workers to launch\n");
+    printf("-s: Defines how many workers are allowed to run simultaneously\n");
+    printf("-t: The time limit to pass to the workers\n");
+    printf("-i: How often a worker should be launched (in milliseconds)\n");
+    printf("-f: Name of the arg_f the user wishes to use\n");
 }
 
 
-// Function to get random seconds and nanoseconds ----------------------------------------------
+// Generate random numbers with this function
 void generateRandomTime(int maxSeconds, int *seconds, int *nanoseconds) {
     srand(time(NULL));
 
-    //Generate random seconds between 1 and timeLimit
+    //Generate random seconds between 1 and T-Argument
     *seconds = (rand() % maxSeconds) + 1;
 
     //Generate random nanoseconds
@@ -66,11 +69,11 @@ void generateRandomTime(int maxSeconds, int *seconds, int *nanoseconds) {
 }
 
 
-// increment clock function --------------------------------------------------------------------
+// Function to increment the Clock
 void incrementClock(struct Clock* clockPointer) {
     clockPointer->nanoSeconds += incrementNano;
 
-    // Check if nanoseconds have reached 1 second
+    // Check if nanoseconds have reached 1 second yet, reset Nanoseconds when they do
     if (clockPointer->nanoSeconds >= oneSecond) {
         clockPointer->seconds++;
         clockPointer->nanoSeconds = 0;
@@ -82,13 +85,13 @@ void incrementClock(struct Clock* clockPointer) {
 
 
 
-// function for displaying the process table---------------------------------------------------
-void procTableDisplay(struct Clock* clockPointer, struct PCB* procTable, int proc){
+// function for displaying the process table
+void procTableDisplay(struct Clock* clockPointer, struct PCB* procTable, int arg_n){
     printf("OSS PID: %d  SysClockS: %d  SysClockNano: %d\n", getpid(), clockPointer->seconds, clockPointer->nanoSeconds);
     printf("Process Table: \n");
     printf("Entry Occupied  PID   StartS   StartN\n");
 
-    for(int i=0; i < proc; i++){
+    for(int i=0; i < arg_n; i++){
         printf("%d\t %d\t%d\t%d\t%d\n", i, procTable[i].occupied, procTable[i].pid, procTable[i].startSeconds, procTable[i].startNano);
     }
 }
@@ -110,13 +113,13 @@ void controlHandler(int signum) {
 
 
 //fucntion to handle logging when message is recieved and message is sent----------------------
-void logMessage(const char* logFile, const char* message) {
-    FILE* filePointer = fopen(logFile, "a"); //open logFile in append mode
+void logMessage(const char* arg_f, const char* message) {
+    FILE* filePointer = fopen(arg_f, "a"); //open arg_f in append mode
     if (filePointer != NULL) {
         fprintf(filePointer, "%s", message);
         fclose(filePointer);
     } else {
-        perror("oss.c: Error opening logFile\n");
+        perror("oss.c: Error opening arg_f\n");
         exit(1);
     }
 }
@@ -130,43 +133,54 @@ int main(int argc, char** argv) {
 
     alarm(60);
 
-    int proc, simul, option;
+    int arg_n, arg_s, arg_i, arg_t, opt;
     int randomSeconds, randomNanoSeconds;
-    int timeLimit;
-    char* logFile;
+    char* arg_f;
 
 
     // get opt to get command line arguments
-    while((option = getopt(argc, argv, "hn:s:t:f:")) != -1) {
-        switch(option) {
+    while((opt = getopt(argc, argv, "hn:s:t:i:f:")) != -1) {
+        switch(opt) {
             case 'h':
-                help();
+                print_usage();
                 break;
             case 'n':
-                proc = atoi(optarg);
+                arg_n = atoi(optarg);
                 break;
             case 's':
-                simul = atoi(optarg);
+                arg_s = atoi(optarg);
                 break;
             case 't':
-                timeLimit = atoi(optarg);
+                arg_t = atoi(optarg);
+                break;
+            case 'i':
+                arg_i = atoi(optarg);
+                arg_i *= 100000000;
                 break;
             case 'f':
-                logFile = optarg;
+                arg_f = optarg;
                 break;
             case '?':
-                help();
+                print_usage();
                 return EXIT_FAILURE;
             default:
                 break;
         }
     }
 
+    // Check if all argument were provided for use
+    if (arg_n <= 0 || arg_s <= 0 || arg_t <= 0 || arg_i <= 0 || arg_f == NULL) {
+        printf("All arguments are required\n");
+        print_usage();
+
+        return(EXIT_FAILURE);
+    }
+
     //create array of structs for process table with size = number of children
-    struct PCB processTable[proc];
+    struct PCB processTable[arg_n];
 
     //Initalize the process table information for each process to 0
-    for(int i = 0; i < proc; i++) {
+    for(int i = 0; i < arg_n; i++) {
         processTable[i].occupied = 0;
         processTable[i].pid = 0;
         processTable[i].startSeconds = 0;
@@ -191,14 +205,7 @@ int main(int argc, char** argv) {
     clockPointer->seconds = 0;
     clockPointer->nanoSeconds = 0;
 
-    //check all given info
-    printf("Clock pointer: %d  :%d\n", clockPointer->seconds, clockPointer->nanoSeconds);
-    printf("proc: %d\n", proc);
-    printf("simul: %d\n", simul);
-    printf("timelimit: %d\n", timeLimit);
-    printf("proc: %s\n", logFile);
-
-    //set up message queue and logFile
+    //set up message queue and arg_f
     msgbuffer buf;
     key_t key;
     system("touch msgq.txt");
@@ -217,12 +224,12 @@ int main(int argc, char** argv) {
     printf("oss.c: message queue is set up\n");
 
 
-    for(int i=0; i < simul; i++) {
+    for(int i=0; i < arg_s; i++) {
         pid_t childPid = fork();
 
         if (childPid == 0) {
             // Generate the random numbers for the clock
-            generateRandomTime(timeLimit, &randomSeconds, &randomNanoSeconds);
+            generateRandomTime(arg_t, &randomSeconds, &randomNanoSeconds);
 
             // Change the ints to strings
             char randomSecondsBuffer[20], randomNanoSecondsBuffer[20];
@@ -236,7 +243,7 @@ int main(int argc, char** argv) {
             execvp(args[0], args);
         } else {
             // New child was launched, update process table
-            for(int i = 0; i < proc; i++) {
+            for(int i = 0; i < arg_n; i++) {
                 if (processTable[i].pid == 0) {
                     processTable[i].occupied = 1;
                     processTable[i].pid = childPid;
@@ -249,10 +256,15 @@ int main(int argc, char** argv) {
     }
 
 
-    int workers = simul; //active number of workers
+    int workers = arg_s; //active number of workers
     int workerNum = 0;
     int termWorker = 0;
-
+    int launchTimerS = clockPointer ->seconds;
+    int launchTimerN = clockPointer ->nanoSeconds + arg_i;
+    if (launchTimerN >= oneSecond) {
+        launchTimerS++;
+        launchTimerN = 0;
+    }
     while(!timeout) {
         incrementClock(clockPointer);
 
@@ -277,7 +289,7 @@ int main(int argc, char** argv) {
                 char message[256];
                 sprintf(message, "OSS: Sending message to worker %s PID %s at time %s:%s\n", newBuffer, buffer1, buffer2, buffer3);
                 printf("%s\n", message);
-                logMessage(logFile, message);
+                logMessage(arg_f, message);
             }
 
             //message recieve
@@ -296,7 +308,7 @@ int main(int argc, char** argv) {
                 char message2[256];
                 sprintf(message2, "OSS: Recieving message from worker %s PID %s at time %s:%s\n", newBuffer1, buffer4, buffer5, buffer6);
                 printf("%s\n", message2);
-                logMessage(logFile, message2);
+                logMessage(arg_f, message2);
             }
 
         }
@@ -308,22 +320,33 @@ int main(int argc, char** argv) {
         if (terminatingPid != 0) {
             termWorker++;
 
-            for(int i=0; i < proc; i++) {
+            for(int i=0; i < arg_n; i++) {
                 if(processTable[i].pid == terminatingPid) {
                     processTable[i].occupied = 0;
                     break;
                 }
             }
 
-            if(workers < proc) {
+            if(workers < arg_n && clockPointer->seconds >= launchTimerS) {
+
+                // update launch timer
+                int launchTimerN = clockPointer ->nanoSeconds + arg_i;
+                if (launchTimerN >= oneSecond) {
+                    launchTimerS++;
+                    launchTimerN = 0;
+                }
+
+
+
                 //increment the number of active workers
                 workers++;
                 //fork to worker
                 pid_t childPid = fork();
 
+
                 if (childPid == 0) {
                     // Generate the random numbers for the clock
-                    generateRandomTime(timeLimit, &randomSeconds, &randomNanoSeconds);
+                    generateRandomTime(arg_t, &randomSeconds, &randomNanoSeconds);
 
                     // Change the ints to strings
                     char randomSecondsBuffer[20], randomNanoSecondsBuffer[20];
@@ -337,7 +360,7 @@ int main(int argc, char** argv) {
                     execvp(args[0], args);
                 } else {
                     // New child was launched, update process table
-                    for(int i = 0; i < proc; i++) {
+                    for(int i = 0; i < arg_n; i++) {
                         if (processTable[i].pid == 0) {
                             processTable[i].occupied = 1;
                             processTable[i].pid = childPid;
@@ -352,23 +375,23 @@ int main(int argc, char** argv) {
 
         //display process table every half second
         if ((clockPointer->nanoSeconds % (int)(oneSecond / 2)) == 0) {
-            procTableDisplay(clockPointer, processTable, proc);
+            procTableDisplay(clockPointer, processTable, arg_n);
 
-            if(termWorker >= proc) {
+            if(termWorker >= arg_n) {
                 break;
             }
         }
 
         //increment worker number
         workerNum++;
-        if(workerNum >= proc) {
+        if(workerNum >= arg_n) {
             workerNum = 0;
         }
 
     }
 
     // do clean up
-    for(int i=0; i < proc; i++) {
+    for(int i=0; i < arg_n; i++) {
         if(processTable[i].occupied == 1) {
             kill(processTable[i].pid, SIGKILL);
         }
